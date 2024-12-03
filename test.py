@@ -28,7 +28,7 @@ class Env():
     """
 
     def __init__(self):
-        self.env = gym.make('CarRacing-v3', render_mode = 'human')
+        self.env = gym.make('CarRacing-v3', render_mode = 'rgb_array')
         # self.env.seed(args.seed)
         self.reward_threshold = self.env.spec.reward_threshold
 
@@ -141,7 +141,6 @@ class Agent():
 
     def __init__(self, pretrained):
         self.net = Net().float().to(device)
-        self.pretrained = pretrained
 
     def select_action(self, state):
         state = torch.from_numpy(state).float().to(device).unsqueeze(0)
@@ -153,17 +152,17 @@ class Agent():
         return action
 
     def load_param(self):
-        dir = 'param/ppo_net_params overnight.pkl' if self.pretrained else 'param/ppo_net_params2.pkl'
+        dir = 'param/ppo_net_params.pkl'
         self.net.load_state_dict(torch.load(dir))
 
-def to_csv(tuple_list, pretrained):
+def to_csv(tuple_list):
     df = pd.DataFrame(data=tuple_list, columns=['Episode_num', 'Test Score', 'Frames Used'])
-    dir = 'test_data_self_model pretrained' if pretrained else 'test_data_self_model'
+    dir = 'test_data_self_model'
     df.to_csv(f'./data/{dir}.csv', index = False)
 
 
-def run_test(pretrained = True):
-    agent = Agent(pretrained)
+def run_test():
+    agent = Agent()
     agent.load_param()
 
     env = Env()
@@ -189,7 +188,7 @@ def run_test(pretrained = True):
         print(f'Ep {i_ep} Score: {round(score, 2)} Frames: {t}')
         testing_records.append((i_ep, score, t))
 
-    to_csv(testing_records, pretrained)
+    to_csv(testing_records)
 
 if __name__ == "__main__":
-    run_test(pretrained=False)
+    run_test()

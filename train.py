@@ -193,7 +193,7 @@ class Agent():
         return action, a_logp
 
     def save_param(self):
-        torch.save(self.net.state_dict(), 'param/ppo_net_params2.pkl')
+        torch.save(self.net.state_dict(), 'param/ppo_net_params.pkl')
 
     def store(self, transition):
         self.buffer[self.counter] = transition
@@ -284,7 +284,7 @@ def run_train():
                 draw_reward(xdata=i_ep, ydata=running_score)
             print('Ep {}\tLast score: {:.2f}\tMoving average score: {:.2f}'.format(i_ep, score, running_score))
             agent.save_param()
-            f = open('/Users/itsdc03/Desktop/Reinforcement Learning/pytorch_car_caring/data/train2.txt', 'a')
+            f = open('/Users/itsdc03/Desktop/Reinforcement Learning/pytorch_car_caring/data/train.txt', 'a')
             f.write('\n'.join(str(t) for t in tuple_list))
             f.write('\n')
             tuple_list = []

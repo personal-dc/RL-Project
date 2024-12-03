@@ -5,7 +5,7 @@ from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import DummyVecEnv
 import pandas as pd
 
-env = gym.make('CarRacing-v3', render_mode='human')
+env = gym.make('CarRacing-v3', render_mode='rgb_array')
 print(env.spec)
 
 
