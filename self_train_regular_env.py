@@ -51,19 +51,19 @@ def to_csv(tuple_list):
 ## log probability of action (scalar)
 ## reward (scalar)
 ## next state (4-stack grayscaled images) '''
-transition = np.dtype([('s', np.float64, (img_stack_len, 96, 96)), 
+transition = np.dtype([('s', np.float64, (96, 96, 3)), 
                        ('a', np.float64, (3,)), 
                        ('a_logp', np.float64),
                        ('r', np.float64), 
-                       ('s_', np.float64, (img_stack_len, 96, 96))])
+                       ('s_', np.float64, (96, 96, 3))])
 
 '''CNN for Actor-Critic PPO'''
 class CNN(nn.Module):
 
     def __init__(self):
         super(CNN, self).__init__()
-        self.common_cnn = nn.Sequential(  # input shape (4, 96, 96)
-            nn.Conv2d(img_stack_len, 8, kernel_size=4, stride=2),
+        self.common_cnn = nn.Sequential(  # input shape (96, 96, 3)
+            nn.Conv2d(3, 8, kernel_size=4, stride=2),
             nn.ReLU(),  # activation
             nn.Conv2d(8, 16, kernel_size=3, stride=2),  # (8, 47, 47)
             nn.ReLU(),  # activation
@@ -84,6 +84,7 @@ class CNN(nn.Module):
         self.apply(self.init_weights)
 
     def forward(self, state):
+            state = state.permute(0, 3, 1, 2)
             state = self.common_cnn(state)
             state = state.view(-1, 256)
             value = self.value(state)
@@ -99,79 +100,6 @@ class CNN(nn.Module):
         if isinstance(m, nn.Conv2d):
             nn.init.xavier_uniform_(m.weight, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias, 0.1)
-
-'''Custom wrapper around gym environment. Does the following :
-## Helps with 4-stacking grayscaled images'''
-class WrapperEnv(gym.Env):
-
-    def __init__(self):
-        self.env = gym.make('CarRacing-v3')
-        self.reward_threshold = self.env.spec.reward_threshold - 100
-
-        #NOTE: Delete later if need be 
-
-        self.action_space = self.env.action_space  # Continuous [-1, 1] for steering, throttle, brake
-        self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(img_stack_len, 96, 96), dtype=np.float32
-        )
-
-
-    def reset(self):
-        self.counter = 0
-
-        # check if agent recently receives reward and terminate otherwise
-        self.recent_avg_reward = Memory()
-
-        # set die to False
-        self.die = False
-        
-        # greyscale the given image
-        rgb_img, _ = self.env.reset()
-        grayscaled_img = self.grayscale(rgb_img)
-        self.img_stack = [grayscaled_img] * img_stack_len  # four frames for decision
-
-        # return initial_state, info
-        return np.array(self.img_stack), {}
-
-    def step(self, action):
-        total_reward = 0
-        for _ in range(repeat_actions):
-            rgb_img, reward, done, trunc, _ = self.env.step(action)
-
-            # green penalty
-            if np.mean(rgb_img[:, :, 1]) > 185.0: reward -= 0.05
-
-            # don't penalize dying
-            if done: reward += 100
-
-            total_reward += reward
-
-            # if no reward recently, end the episode
-            no_reward = True if self.recent_avg_reward.update_and_return_avg(reward) <= -0.1 else False
-
-            if no_reward or done:
-                break
-
-        # get new state    
-        grayscaled_img = self.grayscale(rgb_img)
-        assert grayscaled_img.shape == (96, 96), f"Image shape is incorrect: {grayscaled_img.shape}"
-
-        # append new state 
-        self.img_stack.pop(0)
-        self.img_stack.append(grayscaled_img)
-        assert len(self.img_stack) == img_stack_len, f"stack length is : {len(self.stack)}"
-        
-        return np.array(self.img_stack), total_reward, done, no_reward, {}
-
-    def render(self, *arg):
-        self.env.render(*arg)
-
-    @staticmethod
-    def grayscale(rgb, normalize=True):
-        grayscaled = np.dot(rgb[..., :], [0.299, 0.587, 0.114]) # grayscale it
-        # normalize it
-        if normalize: grayscaled = grayscaled / 128. - 1.
-        return grayscaled
 
 '''Car Agent to train the CNN'''
 class CarAgent():
@@ -271,7 +199,7 @@ class CarAgent():
 # code to start training the agent
 def train_agent():
     agent = CarAgent()
-    env = WrapperEnv()
+    env = gym.make('CarRacing-v3', render_mode='rgb_array')
 
     moving_avg = 0
     state, _ = env.reset()
@@ -294,12 +222,13 @@ def train_agent():
             state = state_
             if done or no_reward:
                 break
+
         moving_avg = moving_avg * 0.99 + score * 0.01
 
         data_tuple = (ep, score, moving_avg)
         tuple_list.append(data_tuple)
         
-        if score > env.reward_threshold : score_counter+=1
+        if score > (env.spec.reward_threshold-100) : score_counter+=1
 
         if ep % print_steps == 0:
             agent.save_param()
