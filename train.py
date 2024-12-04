@@ -4,6 +4,8 @@ from cProfile import run
 import numpy as np
 
 import gymnasium as gym
+from gym import spaces
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,8 +13,13 @@ import torch.optim as optim
 from torch.distributions import Beta
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 from utils import DrawLine
+import cv2
+import math
 
 import pandas as pd
+
+import matplotlib.pyplot as plt
+
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -26,7 +33,7 @@ parser.add_argument('--seed', type=int, default=0, metavar='N', help='random see
 parser.add_argument('--render', action='store_true', help='render the environment')
 parser.add_argument('--vis', action='store_true', help='use visdom')
 parser.add_argument(
-    '--log-interval', type=int, default=10, metavar='N', help='interval between training status logs (default: 10)')
+    '--log-interval', type=int, default=1, metavar='N', help='interval between training status logs (default: 10)')
 args = parser.parse_args()
 
 use_cuda = torch.cuda.is_available()
@@ -41,7 +48,7 @@ transition = np.dtype([('s', np.float64, (args.img_stack, 96, 96)), ('a', np.flo
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
-class Env():
+class Env(gym.Env):
     """
     Environment wrapper for CarRacing 
     """
@@ -50,13 +57,20 @@ class Env():
         self.env = gym.make('CarRacing-v3')
         # self.env.seed(args.seed)
         self.reward_threshold = self.env.spec.reward_threshold - 100
+        self.img_stack = 4
+        #NOTE: Check and delete if needed
+        self.action_space = self.env.action_space  # Continuous [-1, 1] for steering, throttle, brake
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(self.img_stack, 96, 96), dtype=np.float32
+        )
 
     def reset(self):
         self.counter = 0
-        self.av_r = self.reward_memory()
+        self.av_r = Memory()
 
         self.die = False
-        img_rgb = self.env.reset()
+        img_rgb, _ = self.env.reset()
+
         img_gray = self.rgb2gray(img_rgb)
         self.stack = [img_gray] * args.img_stack  # four frames for decision
         # print(np.array(self.stack).shape)
@@ -74,9 +88,10 @@ class Env():
                 reward -= 0.05
             total_reward += reward
             # if no reward recently, end the episode
-            done = True if self.av_r(reward) <= -0.1 else False
+            done = True if self.av_r.update_and_return_avg(reward) <= -0.1 else False
             if done or die:
                 break
+        
         img_gray = self.rgb2gray(img_rgb)
         assert img_gray.shape == (96, 96), f"Image shape is incorrect: {img_gray.shape}"
         
@@ -96,7 +111,12 @@ class Env():
 
     @staticmethod
     def rgb2gray(rgb, norm=True):
-        rgb = rgb[0] if len(rgb) == 2 else rgb
+        f = open('rgb.txt', 'w')
+        f.write(np.array2string(rgb, threshold=np.inf, separator=', '))
+        # plt.imshow(rgb)
+        # plt.axis('off')  # Turn off axis labels
+        # plt.show()
+        # cv2.imshow('Image', rgb)
         gray = np.dot(rgb[..., :], [0.299, 0.587, 0.114])
         if norm:
             # normalize
@@ -114,10 +134,25 @@ class Env():
             nonlocal count
             history[count] = reward
             count = (count + 1) % length
+            print(history)
+            print(np.mean(history))
             return np.mean(history)
 
         return memory
 
+
+class Memory():
+    def __init__(self):
+        self.count = 0
+        self.length = 100
+        self.memory_arr = np.zeros(self.length)
+
+    def update_and_return_avg(self, reward):
+        self.memory_arr[self.count] = reward
+        self.count = (self.count+1) % self.length
+        print(self.memory_arr)
+        print(np.mean(self.memory_arr))
+        return np.mean(self.memory_arr)
 
 class Net(nn.Module):
     """
@@ -207,10 +242,10 @@ class Agent():
     def update(self):
         self.training_step += 1
 
-        s = torch.tensor(self.buffer['s'], dtype=torch.double).to(device)
-        a = torch.tensor(self.buffer['a'], dtype=torch.double).to(device)
-        r = torch.tensor(self.buffer['r'], dtype=torch.double).to(device).view(-1, 1)
-        s_ = torch.tensor(self.buffer['s_'], dtype=torch.double).to(device)
+        s = torch.tensor(self.buffer['s'], dtype=torch.double)
+        a = torch.tensor(self.buffer['a'], dtype=torch.double)
+        r = torch.tensor(self.buffer['r'], dtype=torch.double).view(-1, 1)
+        s_ = torch.tensor(self.buffer['s_'], dtype=torch.double)
 
         old_a_logp = torch.tensor(self.buffer['a_logp'], dtype=torch.double).to(device).view(-1, 1)
 
@@ -220,17 +255,19 @@ class Agent():
             # adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
         for _ in range(self.ppo_epoch):
-            for index in BatchSampler(SubsetRandomSampler(range(self.buffer_capacity)), self.batch_size, False):
+            for batch in np.array_split(np.random.permutation(np.arange(self.buffer_capacity)), math.ceil(self.buffer_capacity / self.batch_size)):
 
-                alpha, beta = self.net(s[index])[0]
+                alpha, beta = self.net(s[batch])[0]
+                # print(self.net(s[batch])[0])
+                # print(self.net(s[batch])[0])
                 dist = Beta(alpha, beta)
-                a_logp = dist.log_prob(a[index]).sum(dim=1, keepdim=True)
-                ratio = torch.exp(a_logp - old_a_logp[index])
+                a_logp = dist.log_prob(a[batch]).sum(dim=1, keepdim=True)
+                ratio = torch.exp(a_logp - old_a_logp[batch])
 
-                surr1 = ratio * adv[index]
-                surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * adv[index]
+                surr1 = ratio * adv[batch]
+                surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * adv[batch]
                 action_loss = -torch.min(surr1, surr2).mean()
-                value_loss = F.smooth_l1_loss(self.net(s[index])[1], target_v[index])
+                value_loss = F.smooth_l1_loss(self.net(s[batch])[1], target_v[batch])
                 loss = action_loss + 2. * value_loss
 
                 self.optimizer.zero_grad()

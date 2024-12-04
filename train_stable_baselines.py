@@ -1,32 +1,21 @@
 import gymnasium as gym
-from gymnasium import spaces
-import numpy as np
-from stable_baselines3 import PPO, DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
+from self_train import WrapperEnv
+from stable_baselines3.common.env_util import make_vec_env
 
-# class DiscretizedCarRacing(gym.Env):
-#     def __init__(self):
-#         # Create the original CarRacing environment
-#         self.env = gym.make('CarRacing-v3', render_mode='rgb_array', continuous=False)
-#         self.observation_space = self.env.observation_space
-#         self.action_space = spaces.Discrete(5)
-
-#     def step(self, action):
-#         action = int(action)
-#         return self.env.step(action)
-
-#     def render(self):
-#         return self.env.render()
-
-#     def close(self):
-#         self.env.close()
-#     def reset(self, **kwargs):
-#         return self.env.reset(**kwargs)
 
 # env = DiscretizedCarRacing()
 env = gym.make('CarRacing-v3', render_mode='rgb_array')
+
+
 # Wrap the environment with DummyVecEnv (Stable-Baselines3 requires vectorized environments)
 env = DummyVecEnv([lambda: env])
+print(env.observation_space)
+
+env = WrapperEnv()
+env = DummyVecEnv([lambda: env])
+print(env.observation_space)
 
 # Define PPO model
 model = PPO('CnnPolicy', env, verbose=1)
