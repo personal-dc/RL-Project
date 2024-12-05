@@ -21,6 +21,7 @@ torch.manual_seed(args.seed)
 if use_cuda:
     torch.cuda.manual_seed(args.seed)
 
+img_stack_len = 4               # number of frames stacked
 
 class Env():
     """
