@@ -95,10 +95,12 @@ class Net(nn.Module):
     Actor-Critic Network for PPO
     """
 
+class CNN(nn.Module):
+
     def __init__(self):
-        super(Net, self).__init__()
-        self.cnn_base = nn.Sequential(  # input shape (4, 96, 96)
-            nn.Conv2d(args.img_stack, 8, kernel_size=4, stride=2),
+        super(CNN, self).__init__()
+        self.common_cnn = nn.Sequential(  # input shape (4, 96, 96)
+            nn.Conv2d(img_stack_len, 8, kernel_size=4, stride=2),
             nn.ReLU(),  # activation
             nn.Conv2d(8, 16, kernel_size=3, stride=2),  # (8, 47, 47)
             nn.ReLU(),  # activation
@@ -111,27 +113,30 @@ class Net(nn.Module):
             nn.Conv2d(128, 256, kernel_size=3, stride=1),  # (128, 3, 3)
             nn.ReLU(),  # activation
         )  # output shape (256, 1, 1)
-        self.v = nn.Sequential(nn.Linear(256, 100), nn.ReLU(), nn.Linear(100, 1))
-        self.fc = nn.Sequential(nn.Linear(256, 100), nn.ReLU())
-        self.alpha_head = nn.Sequential(nn.Linear(100, 3), nn.Softplus())
-        self.beta_head = nn.Sequential(nn.Linear(100, 3), nn.Softplus())
-        self.apply(self._weights_init)
 
+        self.value = nn.Sequential(nn.Linear(256, 100), nn.ReLU(), nn.Linear(100, 1))
+        self.fc = nn.Sequential(nn.Linear(256, 100), nn.ReLU())
+        self.alpha = nn.Sequential(nn.Linear(100, 3), nn.Softplus())
+        self.beta = nn.Sequential(nn.Linear(100, 3), nn.Softplus())
+        self.apply(self.init_weights)
+
+    def forward(self, state):
+            state = self.common_cnn(state)
+            state = state.view(-1, 256)
+            value = self.value(state)
+            state = self.fc(state)
+            alpha = self.alpha(state) + 1
+            beta = self.beta(state) + 1
+
+            return (alpha, beta), value
+
+    # initialize weights so that gradient updates are okay in the beginning
     @staticmethod
-    def _weights_init(m):
+    def init_weights(m):
         if isinstance(m, nn.Conv2d):
             nn.init.xavier_uniform_(m.weight, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias, 0.1)
 
-    def forward(self, x):
-        x = self.cnn_base(x)
-        x = x.view(-1, 256)
-        v = self.v(x)
-        x = self.fc(x)
-        alpha = self.alpha_head(x) + 1
-        beta = self.beta_head(x) + 1
-
-        return (alpha, beta), v
 
 
 class Agent():
