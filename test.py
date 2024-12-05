@@ -139,7 +139,7 @@ class Agent():
     Agent for testing
     """
 
-    def __init__(self, pretrained):
+    def __init__(self):
         self.net = Net().float().to(device)
 
     def select_action(self, state):
