@@ -314,7 +314,7 @@ def train_agent():
             f.write('\n')
             tuple_list = []
 
-        if score_counter >= 5:
+        if score > env.reward_threshold or ep > 2000:
             print("Solved! Running reward is now {} and the last episode runs to {}!".format(moving_avg, score))
             f.write('\n'.join(str(t) for t in tuple_list))
             f.write('\n')
