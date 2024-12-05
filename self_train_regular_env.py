@@ -236,7 +236,7 @@ def train_agent():
         if ep % print_steps == 0:
             agent.save_param()
             print(f'Episode: {ep}   Score: {round(score, 2)}    Moving Average: {round(moving_avg, 2)}')
-            f = open('/Users/itsdc03/Desktop/Reinforcement Learning/pytorch_car_caring/data/train regular env.txt', 'a')
+            f = open('./data/train regular env.txt', 'a')
             f.write('\n'.join(str(t) for t in tuple_list))
             f.write('\n')
             tuple_list = []
