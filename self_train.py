@@ -1,6 +1,6 @@
 import numpy as np
 import gymnasium as gym
-from gym import spaces
+from gymnasium import spaces
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -309,7 +309,7 @@ def train_agent():
         if ep % print_steps == 0:
             agent.save_param()
             print(f'Episode: {ep}   Score: {round(score, 2)}    Moving Average: {round(moving_avg, 2)}')
-            f = open('/Users/itsdc03/Desktop/Reinforcement Learning/pytorch_car_caring/data/train.txt', 'a')
+            f = open('./data/train.txt', 'a')
             f.write('\n'.join(str(t) for t in tuple_list))
             f.write('\n')
             tuple_list = []

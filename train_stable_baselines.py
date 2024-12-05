@@ -12,9 +12,9 @@ env = gym.make('CarRacing-v3', render_mode='rgb_array')
 env = DummyVecEnv([lambda: env])
 print(env.observation_space)
 
-env = WrapperEnv()
-env = DummyVecEnv([lambda: env])
-print(env.observation_space)
+# env = WrapperEnv()
+# env = DummyVecEnv([lambda: env])
+# print(env.observation_space)
 
 # Define PPO model
 model = PPO('CnnPolicy', env, verbose=1)
