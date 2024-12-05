@@ -245,11 +245,11 @@ class CarAgent():
         # calculate advantage
         with torch.no_grad():
             # critic/target value
-            next_state_values = self.net(s_)[1]
-            target_val = r + gamma * next_state_values
+            curr_state_values = self.net(s_)[1]
+            target_val = r + gamma * curr_state_values
 
             # adv = target - (actor value)
-            adv = target_val - next_state_values
+            adv = target_val - curr_state_values
 
         # run ppo #epoch times
         for _ in range(self.num_iters):
