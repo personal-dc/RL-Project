@@ -12,6 +12,12 @@ import math
 
 torch.manual_seed(0)
 np.random.seed(0)
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda" if use_cuda else "cpu")
+torch.manual_seed(0)
+if use_cuda:
+    torch.cuda.manual_seed(0)
+
 
 # --------------- HYPER PARAMETERS ---------------#
 # ------------------------------------------------#
@@ -192,7 +198,7 @@ class CarAgent():
     
     def __init__(self):
         self.training_step = 0
-        self.net = CNN().double()
+        self.net = CNN().double().to(device)
 
         self.buffer_len = 2000
         self.batch_size = 128
@@ -220,7 +226,7 @@ class CarAgent():
         a_logp = dist.log_prob(action).sum(dim=1)
 
         # turn tensor to np array and return
-        action = action.squeeze().numpy()
+        action = action.squeeze().cpu().numpy()
         a_logp = a_logp.item()
         return action, a_logp
 
@@ -230,11 +236,11 @@ class CarAgent():
         self.training_step += 1
 
         # get (s, a, r, s_, a_logp) from buffer
-        s = torch.tensor(self.buffer['s'], dtype=torch.double)
-        a = torch.tensor(self.buffer['a'], dtype=torch.double)
-        r = torch.tensor(self.buffer['r'], dtype=torch.double).view(-1, 1)
-        s_ = torch.tensor(self.buffer['s_'], dtype=torch.double)
-        old_a_logp = torch.tensor(self.buffer['a_logp'], dtype=torch.double).view(-1, 1)
+        s = torch.tensor(self.buffer['s'], dtype=torch.double).to(device)
+        a = torch.tensor(self.buffer['a'], dtype=torch.double).to(device)
+        r = torch.tensor(self.buffer['r'], dtype=torch.double).to(device).view(-1, 1)
+        s_ = torch.tensor(self.buffer['s_'], dtype=torch.double).to(device)
+        old_a_logp = torch.tensor(self.buffer['a_logp'], dtype=torch.double).to(device).view(-1, 1)
 
         # calculate advantage
         with torch.no_grad():
