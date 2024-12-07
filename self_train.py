@@ -111,7 +111,7 @@ class WrapperEnv(gym.Env):
 
     def __init__(self):
         self.env = gym.make('CarRacing-v3')
-        self.reward_threshold = self.env.spec.reward_threshold - 100
+        self.reward_threshold = self.env.spec.reward_threshold
 
         #NOTE: Delete later if need be 
 
